@@ -57,12 +57,12 @@ def detect(sess, rcnn_cls, image):
     return scores, pred_boxes
 
 
-def load_file_from_dir(dir_path, done_subfolder):
+def load_file_from_dir(dir_path):
     ret = []
     for file in os.listdir(dir_path):
         path_comb = os.path.join(dir_path, file)
-        if file != done_subfolder and os.path.isdir(path_comb):
-            ret += load_file_from_dir(path_comb, done_subfolder)
+        if os.path.isdir(path_comb):
+            ret += load_file_from_dir(path_comb)
         else:
             ret.append(path_comb)
     return ret
@@ -92,18 +92,13 @@ def main():
                         default='model/res101_faster_rcnn_iter_60000.ckpt')
     parser.add_argument('-nms-type', help='Type of nms', choices=['PY_NMS', 'CPU_NMS', 'GPU_NMS'], dest='nms_type',
                         default='CPU_NMS')
-    parser.add_argument('-done-subfolder', help='subfolder to move processed images', dest='done_subfolder',
-                        default='done')
-
 
     args = parser.parse_args()
 
     assert os.path.exists(args.input), 'The input path does not exists'
 
     if os.path.isdir(args.input):
-        files = load_file_from_dir(args.input, args.done_subfolder)
-        if not os.path.exists(os.path.join(args.input, args.done_subfolder)):
-            os.makedirs(os.path.join(args.input, args.done_subfolder))
+        files = load_file_from_dir(args.input)
     else:
         files = [args.input]
     file_len = len(files)
@@ -137,9 +132,10 @@ def main():
 
     time_start = time.time()
 
-    done = []
-
     for idx, file in enumerate(files):
+        _, filename = os.path.split(os.path.abspath(file))
+        if filename in result:
+            continue
         elapsed = time.time() - time_start
         eta = (file_len - idx) * elapsed / idx if idx > 0 else 0
         print('[%d/%d] Elapsed: %s, ETA: %s >> %s' % (idx+1, file_len, fmt_time(elapsed), fmt_time(eta), file))
@@ -156,7 +152,6 @@ def main():
         scores = scores[inds]
         boxes = boxes[inds, :]
 
-        path, filename = os.path.split(os.path.abspath(file))
         result[filename] = []
         for i in range(scores.shape[0]):
             x1, y1, x2, y2 = boxes[i, :].tolist()
@@ -171,14 +166,8 @@ def main():
                 # saving the temporary result
                 with open(args.output, 'w') as f:
                     json.dump(result, f)
-                for img in done:
-                    shutil.move(os.path.join(args.input, img), os.path.join(args.input, args.done_subfolder, img))
-                done = []
         else:
             cv2.imshow(file, img)
-
-        if args.output:
-            done.append(filename)
 
     if args.output:
         with open(args.output, 'w') as f:
