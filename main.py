@@ -6,8 +6,8 @@ import argparse
 import os
 import json
 import time
+import shutil
 from nms_wrapper import NMSType, NMSWrapper
-
 
 def detect(sess, rcnn_cls, image):
     # pre-processing image for Faster-RCNN
@@ -57,12 +57,12 @@ def detect(sess, rcnn_cls, image):
     return scores, pred_boxes
 
 
-def load_file_from_dir(dir_path):
+def load_file_from_dir(dir_path, done_subfolder):
     ret = []
     for file in os.listdir(dir_path):
         path_comb = os.path.join(dir_path, file)
-        if os.path.isdir(path_comb):
-            ret += load_file_from_dir(path_comb)
+        if file != done_subfolder and os.path.isdir(path_comb):
+            ret += load_file_from_dir(path_comb, done_subfolder)
         else:
             ret.append(path_comb)
     return ret
@@ -92,13 +92,18 @@ def main():
                         default='model/res101_faster_rcnn_iter_60000.ckpt')
     parser.add_argument('-nms-type', help='Type of nms', choices=['PY_NMS', 'CPU_NMS', 'GPU_NMS'], dest='nms_type',
                         default='CPU_NMS')
+    parser.add_argument('-done-subfolder', help='subfolder to move processed images', dest='done_subfolder',
+                        default='done')
+
 
     args = parser.parse_args()
 
     assert os.path.exists(args.input), 'The input path does not exists'
 
     if os.path.isdir(args.input):
-        files = load_file_from_dir(args.input)
+        files = load_file_from_dir(args.input, args.done_subfolder)
+        if not os.path.exists(os.path.join(args.input, args.done_subfolder)):
+            os.makedirs(os.path.join(args.input, args.done_subfolder))
     else:
         files = [args.input]
     file_len = len(files)
@@ -124,14 +129,23 @@ def main():
     saver.restore(sess, args.model)
 
     result = {}
+    if os.path.exists(args.output):
+        with open(args.output, 'r') as f:
+            json_file = f.read()
+            result = json.loads(json_file)
+            print('json loaded')
 
     time_start = time.time()
+
+    done = []
 
     for idx, file in enumerate(files):
         elapsed = time.time() - time_start
         eta = (file_len - idx) * elapsed / idx if idx > 0 else 0
         print('[%d/%d] Elapsed: %s, ETA: %s >> %s' % (idx+1, file_len, fmt_time(elapsed), fmt_time(eta), file))
         img = cv2.imread(file)
+        if img is None:
+            continue
         scores, boxes = detect(sess, net, img)
         boxes = boxes[:, 4:8]
         scores = scores[:, 1]
@@ -142,29 +156,35 @@ def main():
         scores = scores[inds]
         boxes = boxes[inds, :]
 
-        result[file] = []
+        path, filename = os.path.split(os.path.abspath(file))
+        result[filename] = []
         for i in range(scores.shape[0]):
             x1, y1, x2, y2 = boxes[i, :].tolist()
             new_result = {'score': float(scores[i]),
                           'bbox': [x1, y1, x2, y2]}
-            result[file].append(new_result)
+            result[filename].append(new_result)
 
             if args.output is None:
                 cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 2)
         if args.output:
-            if ((idx+1) % 1000) == 0:
+            if ((idx+1) % 100) == 0:
                 # saving the temporary result
                 with open(args.output, 'w') as f:
                     json.dump(result, f)
+                for img in done:
+                    shutil.move(os.path.join(args.input, img), os.path.join(args.input, args.done_subfolder, img))
+                done = []
         else:
             cv2.imshow(file, img)
+
+        if args.output:
+            done.append(filename)
 
     if args.output:
         with open(args.output, 'w') as f:
             json.dump(result, f)
     else:
         cv2.waitKey()
-
 
 if __name__ == '__main__':
     main()
