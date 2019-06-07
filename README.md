@@ -1,6 +1,8 @@
 # Anime-Face-Detector
 A Faster-RCNN based anime face detector.
 
+This repo is a fork, the original repo can be found [here](https://github.com/qhgz2013/anime-face-detector)
+
 This detector in trained on 6000 training samples and 641 testing samples, randomly selected from the dataset which is crawled from top 100 [pixiv daily ranking](https://www.pixiv.net/ranking.php?mode=daily).  
 
 Thanks to [OpenCV based Anime face detector](https://github.com/nagadomi/lbpcascade_animeface) written by nagadomi, which helps labelling the data. 
@@ -15,20 +17,17 @@ The original implementation of Faster-RCNN using Tensorflow can be found [here](
 - Pre-trained ResNet101 model
 
 ## Usage
-1. Clone this repository
-    ```bash
-    git clone https://github.com/qhgz2013/anime-face-detector.git
-    ```
-2. Download the pre-trained model  
+
+1. Download the pre-trained model  
     Google Drive: [here](https://drive.google.com/open?id=1WjBgfOUqp4sdRd9BHs4TkdH2EcBtV5ri)    
     Baidu Netdisk: [here](https://pan.baidu.com/s/1bvpCp1sbD7t9qnta8IhpmA)  
-3. Unzip the model file into `model` directory
-4. Build the CPU NMS model (skip this step if use PY_NMS with argument: `-nms-type PY_NMS`)
+2. Unzip the model file into `model` directory
+3. Build the CPU NMS model (skip this step if use PY_NMS with argument: `-nms-type PY_NMS`)
     ```bash
     make clean
     make
     ```
-5. Run the demo as you want
+4. Run the demo as you want
     - Visualize the result (without output path):
         ```bash
         python main.py -i /path/to/image.jpg
